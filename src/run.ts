@@ -20,6 +20,84 @@ import {
 
 const require = createRequire(import.meta.url);
 
+/**
+ * Detects if we're running on Forgejo or Gitea Actions.
+ * These platforms set specific environment variables when running actions.
+ */
+export function isForgejoOrGitea(): boolean {
+  return !!(process.env.GITEA_ACTIONS || process.env.FORGEJO_ACTIONS);
+}
+
+type PullRequestData = {
+  number: number;
+  title: string;
+  body: string | null;
+  state: string;
+};
+
+/**
+ * Fetches existing pull requests from the version branch to the base branch.
+ * Uses different API endpoints for GitHub vs Forgejo/Gitea.
+ *
+ * GitHub: GET /repos/{owner}/{repo}/pulls?state=open&head={owner}:{branch}&base={base}
+ * Forgejo/Gitea: GET /repos/{owner}/{repo}/pulls/{base}/{head}
+ */
+export async function getExistingPullRequests(
+  octokit: Octokit,
+  options: {
+    owner: string;
+    repo: string;
+    head: string;
+    base: string;
+  }
+): Promise<PullRequestData[]> {
+  if (isForgejoOrGitea()) {
+    core.info("Detected Forgejo/Gitea environment, using compatible API");
+    try {
+      // Forgejo/Gitea API: GET /repos/{owner}/{repo}/pulls/{base}/{head}
+      // The head should be just the branch name, not owner:branch
+      const response = await octokit.request(
+        "GET /repos/{owner}/{repo}/pulls/{base}/{head}",
+        {
+          owner: options.owner,
+          repo: options.repo,
+          base: options.base,
+          head: options.head,
+        }
+      );
+      // This endpoint returns a single PR object, not an array
+      const pr = response.data as {
+        number: number;
+        title: string;
+        body: string | null;
+        state: string;
+      };
+      // Only return if the PR is open
+      if (pr.state === "open") {
+        return [pr];
+      }
+      return [];
+    } catch (err: any) {
+      // 404 means no PR exists, which is fine
+      if (err.status === 404) {
+        core.info("No existing pull request found");
+        return [];
+      }
+      throw err;
+    }
+  } else {
+    // GitHub API: GET /repos/{owner}/{repo}/pulls with query params
+    const response = await octokit.rest.pulls.list({
+      owner: options.owner,
+      repo: options.repo,
+      state: "open",
+      head: `${options.owner}:${options.head}`,
+      base: options.base,
+    });
+    return response.data;
+  }
+}
+
 // GitHub Issues/PRs messages have a max size limit on the
 // message body payload.
 // `body is too long (maximum is 65536 characters)`.
@@ -71,12 +149,12 @@ type PublishedPackage = { name: string; version: string };
 
 type PublishResult =
   | {
-      published: true;
-      publishedPackages: PublishedPackage[];
-    }
+    published: true;
+    publishedPackages: PublishedPackage[];
+  }
   | {
-      published: false;
-    };
+    published: false;
+  };
 
 export async function runPublish({
   script,
@@ -111,7 +189,7 @@ export async function runPublish({
       if (pkg === undefined) {
         throw new Error(
           `Package "${pkgName}" not found.` +
-            "This is probably a bug in the action, please open an issue"
+          "This is probably a bug in the action, please open an issue"
         );
       }
       releasedPackages.push(pkg);
@@ -130,7 +208,7 @@ export async function runPublish({
     if (packages.length === 0) {
       throw new Error(
         `No package found.` +
-          "This is probably a bug in the action, please open an issue"
+        "This is probably a bug in the action, please open an issue"
       );
     }
     let pkg = packages[0];
@@ -200,11 +278,10 @@ export async function getVersionPrBody({
   prBodyMaxCharacters,
   branch,
 }: GetMessageOptions) {
-  let messageHeader = `This PR was opened by the [Changesets release](https://github.com/changesets/action) GitHub action. When you're ready to do a release, you can merge this and ${
-    hasPublishScript
-      ? `the packages will be published to npm automatically`
-      : `publish to npm yourself or [setup this action to publish automatically](https://github.com/changesets/action#with-publishing)`
-  }. If you're not ready to do a release yet, that's fine, whenever you add more changesets to ${branch}, this PR will be updated.
+  let messageHeader = `This PR was opened by the [Changesets release](https://github.com/changesets/action) GitHub action. When you're ready to do a release, you can merge this and ${hasPublishScript
+    ? `the packages will be published to npm automatically`
+    : `publish to npm yourself or [setup this action to publish automatically](https://github.com/changesets/action#with-publishing)`
+    }. If you're not ready to do a release yet, that's fine, whenever you add more changesets to ${branch}, this PR will be updated.
 `;
   let messagePrestate = !!preState
     ? `⚠️⚠️⚠️⚠️⚠️⚠️
@@ -330,9 +407,8 @@ export async function runVersion({
   );
 
   const finalPrTitle = `${prTitle}${!!preState ? ` (${preState.tag})` : ""}`;
-  const finalCommitMessage = `${commitMessage}${
-    !!preState ? ` (${preState.tag})` : ""
-  }`;
+  const finalCommitMessage = `${commitMessage}${!!preState ? ` (${preState.tag})` : ""
+    }`;
 
   /**
    * Fetch any existing pull requests that are open against the branch,
@@ -341,18 +417,14 @@ export async function runVersion({
    * (`@changesets/ghcommit` has to reset the branch to the same commit as the base,
    * which GitHub will then react to by closing the PRs)
    */
-  const existingPullRequests = await octokit.rest.pulls.list({
-    ...github.context.repo,
-    state: "open",
-    head: `${github.context.repo.owner}:${versionBranch}`,
+  const existingPullRequests = await getExistingPullRequests(octokit, {
+    owner: github.context.repo.owner,
+    repo: github.context.repo.repo,
+    head: versionBranch,
     base: branch,
   });
   core.info(
-    `Existing pull requests: ${JSON.stringify(
-      existingPullRequests.data,
-      null,
-      2
-    )}`
+    `Existing pull requests: ${JSON.stringify(existingPullRequests, null, 2)}`
   );
 
   await git.pushChanges({ branch: versionBranch, message: finalCommitMessage });
@@ -369,7 +441,7 @@ export async function runVersion({
     prBodyMaxCharacters,
   });
 
-  if (existingPullRequests.data.length === 0) {
+  if (existingPullRequests.length === 0) {
     core.info("creating pull request");
     const { data: newPullRequest } = await octokit.rest.pulls.create({
       base: branch,
@@ -383,7 +455,7 @@ export async function runVersion({
       pullRequestNumber: newPullRequest.number,
     };
   } else {
-    const [pullRequest] = existingPullRequests.data;
+    const [pullRequest] = existingPullRequests;
 
     core.info(`updating found pull request #${pullRequest.number}`);
     await octokit.rest.pulls.update({
