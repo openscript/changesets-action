@@ -1,5 +1,11 @@
 # @changesets/action
 
+## 1.8.0
+
+### Minor Changes
+
+- [`905ea6d`](https://github.com/changesets/action/commit/905ea6d481f54d210f11da2daa15655dadd89f15) Thanks [@openscript](https://github.com/openscript)! - Add Forgejo/Gitea actions support
+
 ## 1.7.0
 
 ### Minor Changes
