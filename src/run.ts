@@ -55,16 +55,13 @@ export async function getExistingPullRequests(
     core.info("Detected Forgejo/Gitea environment, using compatible API");
     try {
       // Forgejo/Gitea API: GET /repos/{owner}/{repo}/pulls/{base}/{head}
-      // The head should be just the branch name, not owner:branch
-      const response = await octokit.request(
-        "GET /repos/{owner}/{repo}/pulls/{base}/{head}",
-        {
-          owner: options.owner,
-          repo: options.repo,
-          base: options.base,
-          head: options.head,
-        }
-      );
+      // Branch names with slashes need to be URL-encoded
+      const encodedBase = encodeURIComponent(options.base);
+      const encodedHead = encodeURIComponent(options.head);
+      const url = `/repos/${options.owner}/${options.repo}/pulls/${encodedBase}/${encodedHead}`;
+      core.info(`Fetching PR from: ${url}`);
+
+      const response = await octokit.request(`GET ${url}`);
       // This endpoint returns a single PR object, not an array
       const pr = response.data as {
         number: number;
@@ -72,6 +69,7 @@ export async function getExistingPullRequests(
         body: string | null;
         state: string;
       };
+      core.info(`Found PR #${pr.number} with state: ${pr.state}`);
       // Only return if the PR is open
       if (pr.state === "open") {
         return [pr];
@@ -80,9 +78,10 @@ export async function getExistingPullRequests(
     } catch (err: any) {
       // 404 means no PR exists, which is fine
       if (err.status === 404) {
-        core.info("No existing pull request found");
+        core.info("No existing pull request found (404)");
         return [];
       }
+      core.info(`Error fetching PR: ${err.status} - ${err.message}`);
       throw err;
     }
   } else {
