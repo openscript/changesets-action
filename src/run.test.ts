@@ -6,7 +6,7 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Git } from "./git.ts";
 import { setupOctokit } from "./octokit.ts";
-import { runVersion } from "./run.ts";
+import { isForgejoOrGitea, runVersion } from "./run.ts";
 
 vi.mock("@actions/github", () => ({
   context: {
@@ -276,5 +276,25 @@ fluminis divesque vulnere aquis parce lapsis rabie si visa fulmineis.
     expect(mockedGithubMethods.pulls.create.mock.calls[0][0].body).toMatch(
       /All release information have been omitted from this message, as the content exceeds the size limit/
     );
+  });
+});
+
+describe("isForgejoOrGitea", () => {
+  it("returns false when no Forgejo/Gitea env vars are set", () => {
+    delete process.env.GITEA_ACTIONS;
+    delete process.env.FORGEJO_ACTIONS;
+    expect(isForgejoOrGitea()).toBe(false);
+  });
+
+  it("returns true when GITEA_ACTIONS is set", () => {
+    process.env.GITEA_ACTIONS = "true";
+    expect(isForgejoOrGitea()).toBe(true);
+    delete process.env.GITEA_ACTIONS;
+  });
+
+  it("returns true when FORGEJO_ACTIONS is set", () => {
+    process.env.FORGEJO_ACTIONS = "true";
+    expect(isForgejoOrGitea()).toBe(true);
+    delete process.env.FORGEJO_ACTIONS;
   });
 });
