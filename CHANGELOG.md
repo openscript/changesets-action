@@ -1,5 +1,11 @@
 # @changesets/action
 
+## 1.8.1
+
+### Patch Changes
+
+- [`2135466`](https://github.com/changesets/action/commit/213546601666ba543dd4a716db7b148c55f4c36f) Thanks [@openscript](https://github.com/openscript)! - Encode branch and base
+
 ## 1.8.0
 
 ### Minor Changes
