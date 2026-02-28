@@ -33,6 +33,8 @@ type PullRequestData = {
   title: string;
   body: string | null;
   state: string;
+  head?: { ref: string };
+  base?: { ref: string };
 };
 
 /**
@@ -40,7 +42,7 @@ type PullRequestData = {
  * Uses different API endpoints for GitHub vs Forgejo/Gitea.
  *
  * GitHub: GET /repos/{owner}/{repo}/pulls?state=open&head={owner}:{branch}&base={base}
- * Forgejo/Gitea: GET /repos/{owner}/{repo}/pulls/{base}/{head}
+ * Forgejo/Gitea: List all open PRs and filter client-side (their list API doesn't support head/base filters)
  */
 export async function getExistingPullRequests(
   octokit: Octokit,
@@ -53,37 +55,21 @@ export async function getExistingPullRequests(
 ): Promise<PullRequestData[]> {
   if (isForgejoOrGitea()) {
     core.info("Detected Forgejo/Gitea environment, using compatible API");
-    try {
-      // Forgejo/Gitea API: GET /repos/{owner}/{repo}/pulls/{base}/{head}
-      // Branch names with slashes need to be URL-encoded
-      const encodedBase = encodeURIComponent(options.base);
-      const encodedHead = encodeURIComponent(options.head);
-      const url = `/repos/${options.owner}/${options.repo}/pulls/${encodedBase}/${encodedHead}`;
-      core.info(`Fetching PR from: ${url}`);
-
-      const response = await octokit.request(`GET ${url}`);
-      // This endpoint returns a single PR object, not an array
-      const pr = response.data as {
-        number: number;
-        title: string;
-        body: string | null;
-        state: string;
-      };
-      core.info(`Found PR #${pr.number} with state: ${pr.state}`);
-      // Only return if the PR is open
-      if (pr.state === "open") {
-        return [pr];
-      }
-      return [];
-    } catch (err: any) {
-      // 404 means no PR exists, which is fine
-      if (err.status === 404) {
-        core.info("No existing pull request found (404)");
-        return [];
-      }
-      core.info(`Error fetching PR: ${err.status} - ${err.message}`);
-      throw err;
-    }
+    // Forgejo/Gitea list endpoint doesn't support head/base filters,
+    // so we list all open PRs and filter client-side
+    const response = await octokit.rest.pulls.list({
+      owner: options.owner,
+      repo: options.repo,
+      state: "open",
+    });
+    // Filter by head and base branch
+    const filtered = response.data.filter(
+      (pr) => pr.head.ref === options.head && pr.base.ref === options.base
+    );
+    core.info(
+      `Found ${response.data.length} open PR(s), ${filtered.length} matching head=${options.head} base=${options.base}`
+    );
+    return filtered;
   } else {
     // GitHub API: GET /repos/{owner}/{repo}/pulls with query params
     const response = await octokit.rest.pulls.list({
