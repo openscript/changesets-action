@@ -1,5 +1,13 @@
 # @changesets/action
 
+## 1.8.3
+
+### Patch Changes
+
+- [#629](https://github.com/changesets/action/pull/629) [`e0c90aa`](https://github.com/changesets/action/commit/e0c90aa7fbd0cc26931a679c5abe9bbc0deb0b50) Thanks [@bluwy](https://github.com/bluwy)! - Fix custom version and publish command argument parsing
+
+- [`76380c7`](https://github.com/changesets/action/commit/76380c7a8b581bf0cf9fb60ae69b9a315c7d8007) Thanks [@openscript](https://github.com/openscript)! - Update from upstream
+
 ## 1.8.2
 
 ### Patch Changes
