@@ -30,6 +30,7 @@ export function isForgejoOrGitea(): boolean {
 
 type PullRequestData = {
   number: number;
+  node_id: string;
   title: string;
   body: string | null;
   state: string;
