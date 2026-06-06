@@ -135,12 +135,12 @@ type PublishedPackage = { name: string; version: string };
 
 type PublishResult =
   | {
-      published: true;
-      publishedPackages: PublishedPackage[];
-    }
+    published: true;
+    publishedPackages: PublishedPackage[];
+  }
   | {
-      published: false;
-    };
+    published: false;
+  };
 
 export async function runPublish({
   script,
@@ -172,7 +172,7 @@ export async function runPublish({
       if (pkg === undefined) {
         throw new Error(
           `Package "${pkgName}" not found.` +
-            "This is probably a bug in the action, please open an issue",
+          "This is probably a bug in the action, please open an issue",
         );
       }
       releasedPackages.push(pkg);
@@ -191,7 +191,7 @@ export async function runPublish({
     if (packages.length === 0) {
       throw new Error(
         `No package found.` +
-          "This is probably a bug in the action, please open an issue",
+        "This is probably a bug in the action, please open an issue",
       );
     }
     let pkg = packages[0];
@@ -263,11 +263,10 @@ export async function getVersionPrBody({
   prBodyMaxCharacters,
   branch,
 }: GetMessageOptions) {
-  let messageHeader = `This PR was opened by the [Changesets release](https://github.com/changesets/action) GitHub action. When you're ready to do a release, you can merge this and ${
-    hasPublishScript
+  let messageHeader = `This PR was opened by the [Changesets release](https://github.com/changesets/action) GitHub action. When you're ready to do a release, you can merge this and ${hasPublishScript
       ? `the packages will be published to npm automatically`
       : `publish to npm yourself or [setup this action to publish automatically](https://github.com/changesets/action#with-publishing)`
-  }. If you're not ready to do a release yet, that's fine, whenever you add more changesets to ${branch}, this PR will be updated.
+    }. If you're not ready to do a release yet, that's fine, whenever you add more changesets to ${branch}, this PR will be updated.
 `;
   let messagePrestate = !!preState
     ? `⚠️⚠️⚠️⚠️⚠️⚠️
@@ -394,9 +393,8 @@ export async function runVersion({
   );
 
   const finalPrTitle = `${prTitle}${!!preState ? ` (${preState.tag})` : ""}`;
-  const finalCommitMessage = `${commitMessage}${
-    !!preState ? ` (${preState.tag})` : ""
-  }`;
+  const finalCommitMessage = `${commitMessage}${!!preState ? ` (${preState.tag})` : ""
+    }`;
 
   /**
    * Fetch any existing pull requests that are open against the branch,
@@ -447,47 +445,60 @@ export async function runVersion({
     const [pullRequest] = existingPullRequests;
 
     core.info(`updating found pull request #${pullRequest.number}`);
-    const convertPullRequestToDraftMutation =
-      prDraft === "always"
-        ? `
-        convertPullRequestToDraft(
-          input: {
-            pullRequestId: $pullRequestId
-          }
+    if (isForgejoOrGitea()) {
+      // Forgejo/Gitea does not support the GitHub GraphQL API.
+      // Use the REST endpoint to update the PR instead.
+      await octokit.rest.pulls.update({
+        owner: github.context.repo.owner,
+        repo: github.context.repo.repo,
+        pull_number: pullRequest.number,
+        title: finalPrTitle,
+        body: prBody,
+        state: "open",
+      });
+    } else {
+      const convertPullRequestToDraftMutation =
+        prDraft === "always"
+          ? `
+          convertPullRequestToDraft(
+            input: {
+              pullRequestId: $pullRequestId
+            }
+          ) {
+            pullRequest {
+              id
+            }
+          }`
+          : "";
+      const updatePullRequestMutation = `
+        mutation UpdatePullRequest(
+          $pullRequestId: ID!
+          $title: String!
+          $body: String!
         ) {
-          pullRequest {
-            id
-          }
-        }`
-        : "";
-    const updatePullRequestMutation = `
-      mutation UpdatePullRequest(
-        $pullRequestId: ID!
-        $title: String!
-        $body: String!
-      ) {
-        ${convertPullRequestToDraftMutation}
+          ${convertPullRequestToDraftMutation}
 
-        updatePullRequest(
-          input: {
-            pullRequestId: $pullRequestId
-            title: $title
-            body: $body
-            state: OPEN
-          }
-        ) {
-          pullRequest {
-            id
+          updatePullRequest(
+            input: {
+              pullRequestId: $pullRequestId
+              title: $title
+              body: $body
+              state: OPEN
+            }
+          ) {
+            pullRequest {
+              id
+            }
           }
         }
-      }
-    `;
+      `;
 
-    await octokit.graphql(updatePullRequestMutation, {
-      pullRequestId: pullRequest.node_id,
-      title: finalPrTitle,
-      body: prBody,
-    });
+      await octokit.graphql(updatePullRequestMutation, {
+        pullRequestId: pullRequest.node_id,
+        title: finalPrTitle,
+        body: prBody,
+      });
+    }
 
     return {
       pullRequestNumber: pullRequest.number,
