@@ -1,5 +1,11 @@
 # @changesets/action
 
+## 1.8.4
+
+### Patch Changes
+
+- Use REST when gitea/forgejo to update PR
+
 ## 1.8.3
 
 ### Patch Changes
