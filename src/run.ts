@@ -137,9 +137,11 @@ type PublishResult =
   | {
     published: true;
     publishedPackages: PublishedPackage[];
+    exitCode: number;
   }
   | {
     published: false;
+    exitCode: number;
   };
 
 export async function runPublish({
@@ -152,6 +154,7 @@ export async function runPublish({
 }: PublishOptions): Promise<PublishResult> {
   let changesetPublishOutput = await getExecOutput(script, undefined, {
     cwd,
+    ignoreReturnCode: true,
     env: { ...process.env, GITHUB_TOKEN: githubToken },
   });
 
@@ -219,10 +222,11 @@ export async function runPublish({
         name: pkg.packageJson.name,
         version: pkg.packageJson.version,
       })),
+      exitCode: changesetPublishOutput.exitCode,
     };
   }
 
-  return { published: false };
+  return { published: false, exitCode: changesetPublishOutput.exitCode };
 }
 
 const requireChangesetsCliPkgJson = (cwd: string) => {
@@ -264,8 +268,8 @@ export async function getVersionPrBody({
   branch,
 }: GetMessageOptions) {
   let messageHeader = `This PR was opened by the [Changesets release](https://github.com/changesets/action) GitHub action. When you're ready to do a release, you can merge this and ${hasPublishScript
-      ? `the packages will be published to npm automatically`
-      : `publish to npm yourself or [setup this action to publish automatically](https://github.com/changesets/action#with-publishing)`
+    ? `the packages will be published to npm automatically`
+    : `publish to npm yourself or [setup this action to publish automatically](https://github.com/changesets/action#with-publishing)`
     }. If you're not ready to do a release yet, that's fine, whenever you add more changesets to ${branch}, this PR will be updated.
 `;
   let messagePrestate = !!preState
