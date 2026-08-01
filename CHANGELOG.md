@@ -1,5 +1,11 @@
 # @changesets/action
 
+## 1.9.0
+
+### Minor Changes
+
+- [`9a6af1f`](https://github.com/changesets/action/commit/9a6af1f9306b6018e73527406892bd1e2aef18e6) Thanks [@openscript](https://github.com/openscript)! - Merge v1.9.0 changes from upstream
+
 ## 1.8.4
 
 ### Patch Changes
