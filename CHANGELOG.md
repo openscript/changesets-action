@@ -1,5 +1,11 @@
 # @changesets/action
 
+## 1.9.2
+
+### Patch Changes
+
+- Build new version
+
 ## 1.9.1
 
 ### Patch Changes
