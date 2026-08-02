@@ -12,7 +12,7 @@ const getOptionalInput = (name: string) => core.getInput(name) || undefined;
 (async () => {
   // to maintain compatibility with workflows created before github-token input was introduced
   // it's important to prefer the explicitly set GITHUB_TOKEN over the default token coming from github.token
-  let githubToken = process.env.GITHUB_TOKEN || core.getInput("github-token");
+  let githubToken = core.getInput("github-token") || process.env.GITHUB_TOKEN;
 
   if (!githubToken) {
     core.setFailed("Please add the GITHUB_TOKEN to the changesets action");
@@ -139,12 +139,11 @@ const getOptionalInput = (name: string) => core.getInput(name) || undefined;
 
       if (result.exitCode !== 0) {
         core.error(
-          `Publish command exited with code ${result.exitCode}${
-            result.published
-              ? `, but some packages were published: ${result.publishedPackages
-                  .map((p) => `${p.name}@${p.version}`)
-                  .join(", ")}`
-              : ""
+          `Publish command exited with code ${result.exitCode}${result.published
+            ? `, but some packages were published: ${result.publishedPackages
+              .map((p) => `${p.name}@${p.version}`)
+              .join(", ")}`
+            : ""
           }`,
         );
         process.exit(result.exitCode);
