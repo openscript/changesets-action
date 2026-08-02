@@ -1,5 +1,11 @@
 # @changesets/action
 
+## 1.9.1
+
+### Patch Changes
+
+- Prefer input token
+
 ## 1.9.0
 
 ### Minor Changes
