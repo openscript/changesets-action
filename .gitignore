@@ -4,5 +4,4 @@ node_modules
 *.log
 .env
 
-dist/
 .pnpm-store
