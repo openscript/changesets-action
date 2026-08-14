@@ -26,14 +26,6 @@ import {
   throwOnRemovedCommitModeInput();
 
   const githubToken = getRequiredInput("github-token");
-  if (process.env.GITHUB_TOKEN && process.env.GITHUB_TOKEN !== githubToken) {
-    throw new Error(
-      'The GITHUB_TOKEN environment variable is set and does not match the "github-token" input. ' +
-      'Please pass the custom GitHub token to the "github-token" input and ' +
-      "remove the GITHUB_TOKEN environment variable to avoid conflicts.",
-    );
-  }
-
   const pushWithGitCli = core.getBooleanInput("push-with-git-cli");
   const prDraft = getOptionalInput("pr-draft");
   if (prDraft !== undefined && prDraft !== "always" && prDraft !== "create") {
