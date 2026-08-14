@@ -10,6 +10,9 @@ on:
   merge_group:
     branches:
       - main
+      - next
+      # merge group rulesets don't allow wildcards so in settings each maintenance branch needs to be added separately
+      - "maintenance/v*" # branch rulesets don't support v[0-9]+
 
 permissions:
   contents: read
@@ -27,12 +30,12 @@ jobs:
       security-events: write # allow writing security events
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
 
       - name: Run zizmor
-        uses: zizmorcore/zizmor-action@b1d7e1fb5de872772f31590499237e7cce841e8e # v0.5.3
+        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
         with:
           persona: pedantic
           annotations: true
@@ -40,48 +43,30 @@ jobs:
 
   test:
     name: Test
-    timeout-minutes: 20
     runs-on: ubuntu-latest
-
+    timeout-minutes: 20
     steps:
-      - name: Check out repo
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - uses: ./.github/actions/ci-setup
+      - uses: $/.github/actions/ci-setup
 
       - name: Test
         run: pnpm test
 
   typecheck:
     name: Typecheck
-    timeout-minutes: 20
     runs-on: ubuntu-latest
-
+    timeout-minutes: 20
     steps:
-      - name: Check out repo
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - uses: ./.github/actions/ci-setup
+      - uses: $/.github/actions/ci-setup
 
       - name: Typecheck
         run: pnpm typecheck
 
   lint:
     name: Lint
-    timeout-minutes: 20
     runs-on: ubuntu-latest
-
+    timeout-minutes: 20
     steps:
-      - name: Check out repo
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - uses: ./.github/actions/ci-setup
+      - uses: $/.github/actions/ci-setup
 
       - name: Format
         run: pnpm format

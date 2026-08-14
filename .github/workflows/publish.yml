@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+      - next
+      - "maintenance/v*" # branch rulesets don't support v[0-9]+
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -13,74 +15,84 @@ concurrency:
 permissions: {} # each job should define its own permission explicitly
 
 jobs:
-  version:
-    name: Version
+  select-mode:
+    name: Select mode
     runs-on: ubuntu-latest
-    environment: version
     timeout-minutes: 20
     outputs:
-      hasChangesets: ${{ steps.changesets.outputs.hasChangesets }}
+      mode: ${{ steps.select-mode.outputs.mode }}
     permissions:
-      contents: write # to create release (changesets/action)
-      issues: write # to post issue comments (changesets/action)
-      pull-requests: write # to create pull request (changesets/action)
+      contents: read # to check out repo (actions/checkout)
     steps:
-      - name: Check out repo
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-
-      - uses: ./.github/actions/ci-setup
+      - uses: $/.github/actions/ci-setup
         with:
           skip-cache: true # avoid cache poisoning attacks
 
       - name: Build
         run: pnpm build
 
-      - uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
-        id: app-token
+      - name: Select mode
+        id: select-mode
+        uses: ./select-mode
+
+  version:
+    name: Version
+    if: needs.select-mode.outputs.mode == 'version'
+    needs: select-mode
+    runs-on: ubuntu-latest
+    environment: version
+    timeout-minutes: 20
+    permissions:
+      contents: read # to check out repo (actions/checkout)
+    steps:
+      - uses: $/.github/actions/ci-setup
+        with:
+          skip-cache: true # avoid cache poisoning attacks
+
+      - name: Build
+        run: pnpm build
+
+      - uses: $/.github/actions/setup-bot-auth
+        id: bot-auth
         with:
           client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write # to create version commits (changesets/action)
+          permission-pull-requests: write # to create pull request (changesets/action)
 
       - name: Create or update release pull request
         id: changesets
-        uses: ./
+        uses: ./version
         with:
-          github-token: ${{ steps.app-token.outputs.token }}
-          version: pnpm bump
+          github-token: ${{ steps.bot-auth.outputs.token }}
+          script: pnpm bump
 
   publish:
     name: Publish
-    if: needs.version.outputs.hasChangesets == 'false'
-    needs: version
+    if: needs.select-mode.outputs.mode == 'publish'
+    needs: select-mode
     runs-on: ubuntu-latest
     environment: marketplace
     timeout-minutes: 20
     permissions:
       contents: write # to create release and have it authored by github-actions (changesets/action)
     steps:
-      - uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
-        id: app-token
-        with:
-          client-id: ${{ vars.APP_CLIENT_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - name: Check out repo
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: true
-          # we need this token to bypass the branch and tag protection rules
-          token: ${{ steps.app-token.outputs.token }}
-
-      - uses: ./.github/actions/ci-setup
+      - uses: $/.github/actions/ci-setup
         with:
           skip-cache: true # avoid cache poisoning attacks
 
       - name: Build
         run: pnpm build
 
-      - name: Publish to marketplace
-        uses: ./
+      - uses: $/.github/actions/setup-bot-auth
+        id: bot-auth
         with:
-          publish: pnpm release
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write # to bypass branch and tag protection rules (release.ts)
+
+      - name: Publish to marketplace
+        uses: ./publish
+        with:
+          github-token: ${{ steps.bot-auth.outputs.token }}
+          script: pnpm release

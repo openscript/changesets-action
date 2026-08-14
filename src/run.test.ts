@@ -1,11 +1,12 @@
 import path from "node:path";
+import * as core from "@actions/core";
 import type { Changeset } from "@changesets/types";
-import writeChangeset from "@changesets/write";
+import { writeChangeset } from "@changesets/write";
 import { createFixture } from "fs-fixture";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { Git } from "./git.ts";
-import { setupOctokit } from "./octokit.ts";
-import { isForgejoOrGitea, runVersion } from "./run.ts";
+import { exec } from "tinyexec";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { GitHub } from "./github.ts";
+import { runPublish, runVersion } from "./run.ts";
 
 vi.mock("@actions/github", () => ({
   context: {
@@ -21,8 +22,13 @@ vi.mock("@actions/github", () => ({
     graphql: mockedGraphql,
   }),
 }));
-vi.mock("./git.ts");
-vi.mock("@changesets/ghcommit/git");
+vi.mock("@actions/core", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@actions/core")>()),
+  error: vi.fn(),
+  notice: vi.fn(),
+  warning: vi.fn(),
+}));
+vi.mock("@changesets/ghcommit");
 
 let mockedGithubMethods = {
   pulls: {
@@ -58,6 +64,7 @@ function createSimpleProjectFixture() {
       private: true,
       workspaces: ["packages/*"],
     }),
+    "package-lock.json": "",
   });
 }
 
@@ -84,6 +91,7 @@ function createIgnoredPackageFixture() {
       private: true,
       workspaces: ["packages/*"],
     }),
+    "package-lock.json": "",
   });
 }
 
@@ -91,8 +99,77 @@ const writeChangesets = (changesets: Changeset[], cwd: string) => {
   return Promise.all(changesets.map((commit) => writeChangeset(commit, cwd)));
 };
 
+const createGithub = (cwd: string) =>
+  new GitHub({
+    cwd,
+    githubToken: "@@GITHUB_TOKEN",
+    pushWithGitCli: false,
+  });
+
+async function initializeGitRepository(cwd: string) {
+  await exec("git", ["init"], {
+    nodeOptions: { cwd },
+    throwOnError: true,
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+describe("publish", () => {
+  it("warns when a custom publish script does not create the output file", async () => {
+    await using fixture = await createSimpleProjectFixture();
+    const cwd = fixture.path;
+    await initializeGitRepository(cwd);
+    vi.stubEnv("RUNNER_TEMP", cwd);
+
+    const result = await runPublish({
+      script: 'node -e "void 0"',
+      github: createGithub(cwd),
+      createGithubReleases: true,
+      pushGitTags: true,
+      cwd,
+    });
+
+    expect(result).toEqual({ published: false, exitCode: 0 });
+    expect(core.warning).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "GitHub releases and git tags cannot be created without this output",
+      ),
+    );
+  });
+
+  it("throws when the built-in publish command does not create the output file", async () => {
+    await using fixture = await createFixture({
+      "node_modules/@changesets/cli/package.json": JSON.stringify({
+        name: "@changesets/cli",
+        type: "module",
+      }),
+      "node_modules/@changesets/cli/bin.js": "",
+      "package.json": JSON.stringify({
+        name: "simple-project",
+        version: "1.0.0",
+      }),
+      "package-lock.json": "",
+    });
+    const cwd = fixture.path;
+    await initializeGitRepository(cwd);
+    vi.stubEnv("RUNNER_TEMP", cwd);
+
+    await expect(
+      runPublish({
+        github: createGithub(cwd),
+        createGithubReleases: true,
+        pushGitTags: true,
+        cwd,
+      }),
+    ).rejects.toThrow("Failed to read changesets output at");
+  });
 });
 
 describe("version", () => {
@@ -126,9 +203,7 @@ describe("version", () => {
     );
 
     await runVersion({
-      octokit: setupOctokit("@@GITHUB_TOKEN"),
-      githubToken: "@@GITHUB_TOKEN",
-      git: new Git({ cwd }),
+      github: createGithub(cwd),
       cwd,
     });
 
@@ -161,9 +236,7 @@ describe("version", () => {
     );
 
     await runVersion({
-      octokit: setupOctokit("@@GITHUB_TOKEN"),
-      githubToken: "@@GITHUB_TOKEN",
-      git: new Git({ cwd }),
+      github: createGithub(cwd),
       cwd,
       prDraft: "create",
     });
@@ -197,9 +270,7 @@ describe("version", () => {
     );
 
     await runVersion({
-      octokit: setupOctokit("@@GITHUB_TOKEN"),
-      githubToken: "@@GITHUB_TOKEN",
-      git: new Git({ cwd }),
+      github: createGithub(cwd),
       cwd,
     });
 
@@ -232,9 +303,7 @@ describe("version", () => {
     );
 
     await runVersion({
-      octokit: setupOctokit("@@GITHUB_TOKEN"),
-      githubToken: "@@GITHUB_TOKEN",
-      git: new Git({ cwd }),
+      github: createGithub(cwd),
       cwd,
     });
 
@@ -287,9 +356,7 @@ fluminis divesque vulnere aquis parce lapsis rabie si visa fulmineis.
     );
 
     await runVersion({
-      octokit: setupOctokit("@@GITHUB_TOKEN"),
-      githubToken: "@@GITHUB_TOKEN",
-      git: new Git({ cwd }),
+      github: createGithub(cwd),
       cwd,
       prBodyMaxCharacters: 1000,
     });
@@ -346,9 +413,7 @@ fluminis divesque vulnere aquis parce lapsis rabie si visa fulmineis.
     );
 
     await runVersion({
-      octokit: setupOctokit("@@GITHUB_TOKEN"),
-      githubToken: "@@GITHUB_TOKEN",
-      git: new Git({ cwd }),
+      github: createGithub(cwd),
       cwd,
       prBodyMaxCharacters: 500,
     });
@@ -383,9 +448,7 @@ fluminis divesque vulnere aquis parce lapsis rabie si visa fulmineis.
     );
 
     await runVersion({
-      octokit: setupOctokit("@@GITHUB_TOKEN"),
-      githubToken: "@@GITHUB_TOKEN",
-      git: new Git({ cwd }),
+      github: createGithub(cwd),
       cwd,
       prDraft: "create",
     });
@@ -417,9 +480,7 @@ fluminis divesque vulnere aquis parce lapsis rabie si visa fulmineis.
     );
 
     await runVersion({
-      octokit: setupOctokit("@@GITHUB_TOKEN"),
-      githubToken: "@@GITHUB_TOKEN",
-      git: new Git({ cwd }),
+      github: createGithub(cwd),
       cwd,
       prDraft: "always",
     });
